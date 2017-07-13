@@ -2,7 +2,7 @@
 
 ## About
 - This is a tool to automate Whatsapp messenger on a web browser.
-- This tool uses the Selenium module in Python 3 for parsing. 
+- This tool uses the Selenium module in Python 3 for automation. 
 
 ## Installation
 - **Fork** this project to your GitHub account.
