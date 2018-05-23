@@ -21,8 +21,8 @@ config = {
     'get_msg_interval': 5,  # Time (seconds). Recommended value: 5
     'colors': True,  # True/False. True prints colorful msgs in console
     'ww_url': "https://web.whatsapp.com/",
-    'get_message_url' : "http://localhost:8000/outbox/",
-    'api_token': 'e36721bd42a5cf5857b0827650d52a38cffd516b'
+    'get_message_url' : "",
+    'api_token': ''
 }
 
 message_scheduler = sched.scheduler(time.time, time.sleep)
@@ -69,7 +69,7 @@ try:
         Type 'msg' in 'driver' and press RETURN
         """
         # select correct input box to type msg
-        input_box = driver.find_element(By.XPATH, '//*[@id="main"]//footer//div[contains(@class, "input")]')
+        input_box = driver.find_element(By.XPATH, '//*[@id="main"]//footer//div[contains(@class, "_2S1VP")]')
         # input_box.clear()
         input_box.click()
 
@@ -125,8 +125,10 @@ try:
                                 data = {'chat_found' : '1', 'processed' : '1'}
 
                             except NoSuchElementException as e:
-                                data = {'chat_found' : '2', 'processed' : '0'}
-                                print(decorateMsg("^-- Can not find this Receiver in the chat list.\n\n", bcolors.FAIL))
+                                # data = {'chat_found' : '2', 'processed' : '0'}
+                                # print(decorateMsg("^-- Can not find this Receiver in the chat list.\n\n", bcolors.FAIL))
+                                sendMessage(driver,sms_body)
+                                data = {'chat_found' : '1', 'processed' : '1'}
 
                             except WebDriverException as e:
                                 data = {'chat_found' : '2', 'processed' : '0'}
