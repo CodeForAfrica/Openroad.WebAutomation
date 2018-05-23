@@ -10,20 +10,19 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import WebDriverException as WebDriverException
 from selenium.common.exceptions import NoSuchElementException as NoSuchElementException
-
-import urllib.request as urllib2
 import json
+import logging
 
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+logger = logging.getLogger(__name__)
 
 config = {
-    'chromedriver_path': '/usr/local/share/chromedriver',
+    #'chromedriver_path': '/usr/local/share/chromedriver',
+    'chromedriver_path': 'bin/chromedriver',
     'get_msg_interval': 5,  # Time (seconds). Recommended value: 5
     'colors': True,  # True/False. True prints colorful msgs in console
     'ww_url': "https://web.whatsapp.com/",
-    'get_message_url' : "",
-    'update_message_url' : ""
+    'get_message_url' : "http://localhost:8000/outbox/",
+    'api_token': 'e36721bd42a5cf5857b0827650d52a38cffd516b'
 }
 
 message_scheduler = sched.scheduler(time.time, time.sleep)
@@ -43,27 +42,28 @@ class bcolors:
 
 try:
     def main():
+        print 'Starting app...'
         # setting up Chrome with selenium
         driver = webdriver.Chrome(config['chromedriver_path'])
-        
+        print '*********** Main engine launched **********'
         # open WW in browser
         driver.get(config['ww_url'])
-        
+
         # prompt user to connect device to WW
         while True:
-            isConnected = input(decorateMsg("\n\tPhone connected? y/n: ", bcolors.HEADER))
+            isConnected = raw_input("Phone connected? y/n: ")
             if isConnected.lower() == 'y':
                 break
 
             assert "WhatsApp" in driver.title
 
         # start background thread
-        message_thread = threading.Thread(target=startGetMessages, args=(driver,))
+        message_thread = threading.Thread(target=startfetchMessages, args=(driver,))
         message_thread.start()
 
         while True:
             pass
-    
+
     def sendMessage(driver, msg):
         """
         Type 'msg' in 'driver' and press RETURN
@@ -78,70 +78,80 @@ try:
         action.send_keys(Keys.RETURN)
         action.perform()
 
-    def startGetMessages(driver):
+    def startfetchMessages(driver):
         """
         Start schdeuler that gets messages every get_msg_interval seconds
         """
-        message_scheduler.enter(config['get_msg_interval'], 1, getMessage, (driver, message_scheduler))
+        message_scheduler.enter(config['get_msg_interval'], 1, fetchMessage, (driver, message_scheduler))
         message_scheduler.run()
 
-    def getMessage(driver, scheduler):
-        print("Getting Messages.")
+    def fetchMessage(driver, scheduler):
+        print("Fetching messages...")
+        import requests
+        headers = {
+            'Authorization': 'Token {}'.format(config['api_token'])
+            }
+        try:
+            result = requests.get(config['get_message_url'],headers=headers)
+            data = result.json()
 
-        # Getting outbox message from API.
-        req = urllib2.Request(config['get_message_url'])
-        opener = urllib2.build_opener()
-        f = opener.open(req)
-        data = json.loads(f.read().decode('utf-8'))
+            if 'status' in data.keys():
+                status = data['status']
 
-        status = data['status']
+                if status == 200:
+                    messages = data['messages']
 
-        if status == 200:
-            messages = data['messages']
+                    if messages:
+                        for i in range(len(messages)):
+                            # Preparing the message.
+                            sms_id = messages[i]['id']
+                            sms_category = messages[i]['category']
+                            sms_type = messages[i]['mimetype']
+                            sms_receiver = messages[i]['receiver'].replace("+","")
+                            sms_receiver = sms_receiver.replace(" ","")
+                            sms_receiver_title = messages[i]['receiver']
+                            sms_body = messages[i]['body']
+                            sms_chat_found = messages[i]['chat_found']
+                            sms_processed = messages[i]['processed']
+                            sms_processed_at = messages[i]['processed_at']
+                            sms_created_at = ""
 
-            if messages:
-                for i in range(len(messages)):
-                    # Preparing the message.
-                    sms_id = messages[i]['id']
-                    sms_category = messages[i]['category']
-                    sms_type = messages[i]['mimetype']
-                    sms_receiver = messages[i]['receiver'].replace("+","")
-                    sms_receiver = sms_receiver.replace(" ","")
-                    sms_receiver_title = messages[i]['receiver']
-                    sms_body = messages[i]['body']
-                    sms_chat_found = messages[i]['chat_found']
-                    sms_processed = messages[i]['processed']
-                    sms_processed_at = messages[i]['processed_at']
-                    sms_created_at = ""
+                            # Replying.
+                            # Selecting specific chat.
+                            try:
+                                print (sms_receiver)
+                                chooseReceiver(driver, sms_receiver)
+                                sendMessage(driver,sms_body)
+                                data = {'chat_found' : '1', 'processed' : '1'}
 
-                    # Replying.
-                    # Selecting specific chat.
-                    try:
-                        print (sms_receiver)
-                        chooseReceiver(driver, sms_receiver)
-                        sendMessage(driver,sms_body)
-                        data = {'chat_found' : '1', 'processed' : '1'}
+                            except NoSuchElementException as e:
+                                data = {'chat_found' : '2', 'processed' : '0'}
+                                print(decorateMsg("^-- Can not find this Receiver in the chat list.\n\n", bcolors.FAIL))
 
-                    except NoSuchElementException as e:
-                        data = {'chat_found' : '2', 'processed' : '0'}
-                        print(decorateMsg("^-- Can not find this Receiver in the chat list.\n\n", bcolors.FAIL))
+                            except WebDriverException as e:
+                                data = {'chat_found' : '2', 'processed' : '0'}
+                                print(decorateMsg("^-- Can not process this Receiver.\n\n", bcolors.FAIL))
 
-                    except WebDriverException as e:
-                        data = {'chat_found' : '2', 'processed' : '0'}
-                        print(decorateMsg("^-- Can not process this Receiver.\n\n", bcolors.FAIL))
-                    
-                    # Update the message status.
-                    url = config['update_message_url'] + str(sms_id)
-                    
-                    request = Request(url, urlencode(data).encode(),method='PUT')
-                    urlopen(request)
+                            # Update the message status.
+                            url = "{}{}".format(config['get_message_url'], str(sms_id))
 
-                    time.sleep(5)
-        else:
-                print("There is no any un-processed message.\n")
+                            result = requests.put(url, data=data, headers=headers)
+                            time.sleep(5)
+                else:
+                        print("There are no messages to process.\n")
+            else:
+
+                print 'API responded with {}'.format(data['detail'])
+
+
+        except requests.exceptions.ConnectionError as conn_error:
+            print "An error occured"
+            print  conn_error
 
         # add the task to the scheduler again
-        message_scheduler.enter(config['get_msg_interval'], 1, getMessage, (driver, scheduler,))
+        message_scheduler.enter(config['get_msg_interval'], 1, fetchMessage, (driver, scheduler,))
+
+
 
     def decorateMsg(msg, color=None):
         """
@@ -155,7 +165,7 @@ try:
                 msg_string = color + msg + bcolors.ENDC
 
         return msg_string
-    
+
     def printThreadName(driver):
         global last_thread_name
         curr_thread_name = driver.find_element(By.XPATH, '//*[@id="main"]/header//div[contains(@class, "chat-main")]').text
@@ -163,7 +173,7 @@ try:
             last_thread_name = curr_thread_name
             print(decorateMsg("\n\tSending msgs to:", bcolors.OKBLUE), curr_thread_name)
         return curr_thread_name
-    
+
     def chooseReceiver(driver, receiver):
         input_box = driver.find_element(By.XPATH, '//*[@id="side"]//input')
         input_box.clear()
