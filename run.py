@@ -18,13 +18,22 @@ from selenium.common.exceptions import NoSuchElementException as NoSuchElementEx
 logger = logging.getLogger(__name__)
 
 config = {
+    'ww_api_key': '',
     'ww_chromedriver_path': 'bin/chromedriver',
-    'ww_colors': True,  # True/False. True prints colorful msgs in console
+    'ww_colors': True,  # True/False. True prints colorful msgs in console   
+    'ww_url': '',
     'ww_msg_interval': 5,  # Time (seconds). Recommended value: 5
-    'ww_msg_url': '',
-    'ww_url': 'https://web.whatsapp.com/',
-    'ww_api_token': ''
+    'ww_msg_update_url': '',
+    'ww_msg_url': ''
 }
+
+# API end points
+config['ww_url'] = os.getenv('WW_URL', config['ww_url'])
+config['ww_msg_url'] = os.getenv('WW_MSG_URL', config['ww_msg_url']) + "?api_key=" + os.getenv('WW_API_KEY', config['ww_api_key'])
+config['ww_msg_update_url'] = os.getenv('WW_MSG_UPDATE_URL', config['ww_msg_update_url']) + "?api_key=" + os.getenv('WW_API_KEY', config['ww_api_key'])
+
+print ("Env")
+print config['ww_url']
 
 message_scheduler = sched.scheduler(time.time, time.sleep)
 last_printed_msg_id = 0
@@ -53,7 +62,7 @@ try:
         driver = webdriver.Chrome(ww_chromedriver_path)
         print '*********** Main engine launched **********'
         # open WW in browser
-        ww_url = os.getenv('WW_URL', config['ww_url'])
+        ww_url = config['ww_url']
         driver.get(ww_url)
 
         # prompt user to connect device to WW
@@ -91,21 +100,16 @@ try:
         """
         Start schdeuler that gets messages every ww_msg_interval seconds
         """
-        ww_msg_interval = int(os.getenv(
-            'WW_MSG_INTERVAL', config['ww_msg_interval']))
+        ww_msg_interval = int(config['ww_msg_interval'])
         message_scheduler.enter(
             ww_msg_interval, 1, fetchMessage, (driver, message_scheduler))
         message_scheduler.run()
 
     def fetchMessage(driver, scheduler):
         print("Fetching messages...")
-        ww_api_token = config['ww_api_token']
-        headers = {
-            'Authorization': 'Token {}'.format(ww_api_token)
-        }
         try:
-            ww_msg_url = os.getenv('WW_MSG_URL', config['ww_msg_url'])
-            result = requests.get(ww_msg_url, headers=headers)
+            ww_msg_url = config['ww_msg_url']
+            result = requests.get(ww_msg_url)
             data = result.json()
 
             if 'status' in data.keys():
@@ -118,8 +122,6 @@ try:
                         for i in range(len(messages)):
                             # Preparing the message.
                             sms_id = messages[i]['id']
-                            sms_category = messages[i]['category']
-                            sms_type = messages[i]['mimetype']
                             sms_receiver = messages[i]['receiver'].replace(
                                 "+", "")
                             sms_receiver = sms_receiver.replace(" ", "")
@@ -136,24 +138,21 @@ try:
                                 print (sms_receiver)
                                 chooseReceiver(driver, sms_receiver)
                                 sendMessage(driver, sms_body)
-                                data = {'chat_found': '1', 'processed': '1'}
+                                data = {'message_id': sms_id, 'chat_found': '1', 'processed': '1'}
 
                             except NoSuchElementException as e:
                                 # data = {'chat_found' : '2', 'processed' : '0'}
                                 # print(decorateMsg("^-- Can not find this Receiver in the chat list.\n\n", bcolors.FAIL))
                                 sendMessage(driver, sms_body)
-                                data = {'chat_found': '1', 'processed': '1'}
+                                data = {'message_id': sms_id, 'chat_found': '1', 'processed': '1'}
 
                             except WebDriverException as e:
-                                data = {'chat_found': '2', 'processed': '0'}
+                                data = {'message_id': sms_id, 'chat_found': '2', 'processed': '0'}
                                 print(decorateMsg(
                                     "^-- Can not process this Receiver.\n\n", bcolors.FAIL))
 
                             # Update the message status.
-                            url = "{}{}".format(ww_msg_url, str(sms_id))
-
-                            result = requests.put(
-                                url, data=data, headers=headers)
+                            result = requests.post(config['ww_msg_update_url'], data=data)
                             time.sleep(5)
                 else:
                     print("There are no messages to process.\n")
@@ -166,8 +165,7 @@ try:
             print conn_error
 
         # add the task to the scheduler again
-        ww_msg_interval = int(os.getenv(
-            'WW_MSG_INTERVAL', config['ww_msg_interval']))
+        ww_msg_interval = int(config['ww_msg_interval'])
         message_scheduler.enter(
             ww_msg_interval, 1, fetchMessage, (driver, scheduler))
 
