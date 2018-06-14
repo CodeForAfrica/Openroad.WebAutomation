@@ -1,7 +1,7 @@
-# WhatsApp.WebAutomation
+# Openroad.WebAutomation
 
 ## About
-- This is a tool to automate Whatsapp messenger on a web browser.
+- This is a tool to automate Openroad services through web browser.
 - This tool uses the Selenium module in Python 3 for automation.
 
 ## Installation
@@ -9,19 +9,18 @@
 - After forking, enter the following commands in your terminal.
 
 ```
-$ git clone https://github.com/CodeForTanzania/WhatsApp.WebAutomation
+$ git clone https://github.com/CodeForTanzania/Openroad.WebAutomation
 ```
 - After that get inside the repository and execute the following instructions
 ```
-cd WhatsAppWeb.Automation
+cd Openroad.Automation
 pip install -r requirements.txt
 ```
 
 - Make sure to install Google Chrome or Chromium browser on your OS.
 
-- Set `get_message_url` for fetching messages.  
+- Set `get_message_url` for fetching messages.
 
-- Start the application by running command below and connect your device to WhatsApp Web
 ```
 python run.py
 ```

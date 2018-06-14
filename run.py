@@ -71,7 +71,7 @@ try:
             if isConnected.lower() == 'y':
                 break
 
-            assert "WhatsApp" in driver.title
+            assert "Openroad" in driver.title
 
         # start background thread
         message_thread = threading.Thread(
@@ -176,7 +176,7 @@ try:
                 msg, otherwise
         """
         msg_string = msg
-        if config['colors']:
+        if config['ww_colors']:
             if color:
                 msg_string = "{}{}{}".format(color, msg, bcolors.ENDC)
 
@@ -204,7 +204,7 @@ try:
         main()
 
 except AssertionError as e:
-    sys.exit(decorateMsg("\n\tCannot open Whatsapp web URL.", bcolors.WARNING))
+    sys.exit(decorateMsg("\n\tCannot open web URL.", bcolors.WARNING))
 
 except KeyboardInterrupt as e:
     sys.exit(decorateMsg("\n\tPress Ctrl+C again to exit.", bcolors.WARNING))
